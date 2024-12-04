@@ -1,5 +1,7 @@
 # tkey-led
 
+![tkey led](./images/tkey-led.gif)
+
 Example application for TKey written using TinyGo for the device application and Go for the client application.
 
 It uses the Tillitis framing protocol for communication (https://dev.tillitis.se/protocol/) between the device and client.
