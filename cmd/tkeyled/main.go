@@ -196,15 +196,15 @@ func main() {
 		exit(1)
 	}
 
-	// if err := bl.SetTiming(timing); err != nil {
-	// 	fmt.Printf("SetTiming: %v\n", err)
-	// 	exit(1)
-	// }
+	if err := bl.SetTiming(timing); err != nil {
+		fmt.Printf("SetTiming: %v\n", err)
+		exit(1)
+	}
 
-	// if err := bl.Blinking(blinking); err != nil {
-	// 	fmt.Printf("Blinking: %v\n", err)
-	// 	exit(1)
-	// }
+	if err := bl.Blinking(blinking); err != nil {
+		fmt.Printf("Blinking: %v\n", err)
+		exit(1)
+	}
 
 	exit(0)
 }

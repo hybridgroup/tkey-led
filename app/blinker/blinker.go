@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"machine"
 	"time"
 
@@ -42,17 +43,16 @@ func main() {
 			}
 
 			// wait for full command
-			if i < int(hdr.CmdLen.Bytelen()) {
-				time.Sleep(time.Millisecond * 10)
-				continue
+			if i > int(hdr.CmdLen.Bytelen()) {
+				// handle command
+				handleCommand(input, i, tx)
+
+				// reset, and wait for next command
+				i = 0
+				break
 			}
 
-			// handle command
-			handleCommand(input, i, tx)
-
-			// reset, and wait for next command
-			i = 0
-			break
+			time.Sleep(time.Millisecond * 10)
 		}
 
 		if blinking {
@@ -71,27 +71,25 @@ func handleCommand(input []byte, i int, tx []byte) {
 		machine.LED_GREEN.Low()
 		machine.LED_BLUE.Low()
 
-		switch input[2] {
-		case 0:
-			led = machine.LED_RED
-		case 1:
-			led = machine.LED_GREEN
-		case 2:
-			led = machine.LED_BLUE
-		}
+		led = machine.Pin(input[2])
+
 		proto.NewFrame(rspSetLED, 2, tx)
+		proto.SetFrameData(tx, []byte{proto.StatusOK})
+		uart.Write(tx[:rspSetLED.CmdLen().Bytelen()+1])
 
 	case cmdSetTiming.Code():
-		timing = int(input[2])
+		timing = int(binary.LittleEndian.Uint16(input[2:]))
+
 		proto.NewFrame(rspSetTiming, 2, tx)
+		proto.SetFrameData(tx, []byte{proto.StatusOK})
+		uart.Write(tx[:rspSetTiming.CmdLen().Bytelen()+1])
 
 	case cmdBlinking.Code():
 		blinking = input[2] == 1
+
 		proto.NewFrame(rspBlinking, 2, tx)
+		proto.SetFrameData(tx, []byte{proto.StatusOK})
+		uart.Write(tx[:rspBlinking.CmdLen().Bytelen()+1])
 	}
 
-	proto.SetFrameData(tx, []byte{proto.StatusOK})
-
-	// send response
-	uart.Write(tx[:rspSetLED.CmdLen().Bytelen()])
 }
