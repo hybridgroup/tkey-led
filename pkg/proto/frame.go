@@ -17,6 +17,8 @@ const (
 	StatusBad
 )
 
+var errBufferTooSmall = errors.New("buffer too small for frame")
+
 type FramingHdr struct {
 	ID            byte
 	Endpoint      Endpoint
@@ -24,7 +26,14 @@ type FramingHdr struct {
 	ResponseNotOK bool
 }
 
-func Parse(b byte) (FramingHdr, error) {
+// Len returns the expected length of the frame in bytes.
+func (f *FramingHdr) Len() int {
+	return f.CmdLen.Bytelen()
+}
+
+// ParseFramingHdr parses a framing protocol header byte and returns a
+// FramingHdr struct with the parsed values.
+func ParseFramingHdr(b byte) (FramingHdr, error) {
 	var f FramingHdr
 
 	if (b & 0b1000_0000) != 0 {
@@ -43,7 +52,47 @@ func Parse(b byte) (FramingHdr, error) {
 	return f, nil
 }
 
-// NewFrame writes the framing protocol header byte into a slice of bytes.
+// Frame represents a single frame in the framing protocol.
+type Frame struct {
+	cmd  Cmd
+	id   int
+	data []byte
+}
+
+// NewFrame creates a new frame with the given command, ID and data.
+func NewFrame(cmd Cmd, id int, data []byte) (Frame, error) {
+	if id > 3 {
+		return Frame{}, errors.New("frame ID must be 0..3")
+	}
+	if cmd.Endpoint() > 3 {
+		return Frame{}, errors.New("endpoint must be 0..3")
+	}
+	if cmd.CmdLen() > 3 {
+		return Frame{}, errors.New("cmdlen must be 0..3")
+	}
+
+	return Frame{cmd, id, data}, nil
+}
+
+// Len returns the length of the frame in bytes.
+func (f *Frame) Len() int {
+	return f.cmd.CmdLen().Bytelen()
+}
+
+// Read populates a slice of bytes with the header/data for the frame.
+func (f *Frame) Read(s []byte) (int, error) {
+	if err := f.readFrameHdr(s); err != nil {
+		return 0, err
+	}
+
+	if err := f.readFrameData(s); err != nil {
+		return 0, err
+	}
+
+	return f.Len() + 1, nil
+}
+
+// readFrameHdr populates a slice of bytes with the framing protocol header.
 // The cmd parameter is used to get the endpoint and command length, which
 // together with id parameter are encoded as the header byte. The
 // header byte is placed in the first byte in the returned buffer. The
@@ -78,32 +127,27 @@ func Parse(b byte) (FramingHdr, error) {
 // field does **not** include the header byte. This means that a
 // complete command frame, with a header indicating a command length
 // of 128 bytes, is 128+1 bytes in length.
-func NewFrame(cmd Cmd, id int, buf []byte) error {
-	if id > 3 {
-		return errors.New("frame ID must be 0..3")
-	}
-	if cmd.Endpoint() > 3 {
-		return errors.New("endpoint must be 0..3")
-	}
-	if cmd.CmdLen() > 3 {
-		return errors.New("cmdlen must be 0..3")
-	}
-	if len(buf) < 1+cmd.CmdLen().Bytelen() {
-		return errors.New("buffer too small for frame")
+func (f *Frame) readFrameHdr(buf []byte) error {
+	if len(buf) < f.Len()+1 {
+		return errBufferTooSmall
 	}
 
-	buf[0] = (byte(id) << 5) | (byte(cmd.Endpoint()) << 3) | byte(cmd.CmdLen())
+	buf[0] = (byte(f.id) << 5) | (byte(f.cmd.Endpoint()) << 3) | byte(f.cmd.CmdLen())
 
 	// Set command code
-	buf[1] = cmd.Code()
+	buf[1] = f.cmd.Code()
 
 	return nil
 }
 
-// SetFrameData sets the data in a frame buffer. The data is copied
+// readFrameData populates a slice of bytes with the data in a frame buffer. The data is copied
 // into the buffer starting at the third byte.
-func SetFrameData(buf []byte, data []byte) error {
-	copy(buf[2:], data)
+func (f *Frame) readFrameData(buf []byte) error {
+	if len(buf) < f.Len()+1 {
+		return errBufferTooSmall
+	}
+
+	copy(buf[2:], f.data)
 
 	return nil
 }

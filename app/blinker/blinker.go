@@ -26,7 +26,8 @@ var (
 func main() {
 	// use default settings for UART
 	uart.Configure(machine.UARTConfig{})
-	input := make([]byte, 256)
+
+	rx := make([]byte, 256)
 	tx := make([]byte, 256)
 	i := 0
 	on := true
@@ -34,24 +35,26 @@ func main() {
 	for {
 		for uart.Buffered() > 0 {
 			data, _ := uart.ReadByte()
-			input[i] = data
+			rx[i] = data
 			i++
 
-			hdr, err := proto.Parse(input[0])
+			hdr, err := proto.ParseFramingHdr(rx[0])
 			if err != nil {
-				// TODO: handle error
+				// reset, and wait for next command
+				i = 0
+				break
 			}
 
-			// wait for full command
-			if i > int(hdr.CmdLen.Bytelen()) {
-				// handle command
-				handleCommand(input, i, tx)
+			// did we receive full command?
+			if i > int(hdr.Len()) {
+				handleCommand(rx, tx)
 
 				// reset, and wait for next command
 				i = 0
 				break
 			}
 
+			// wait for more data
 			time.Sleep(time.Millisecond * 10)
 		}
 
@@ -64,32 +67,43 @@ func main() {
 	}
 }
 
-func handleCommand(input []byte, i int, tx []byte) {
-	switch input[1] {
+func handleCommand(rx []byte, tx []byte) (err error) {
+	var response proto.Frame
+
+	switch rx[1] {
 	case cmdSetLED.Code():
 		machine.LED_RED.Low()
 		machine.LED_GREEN.Low()
 		machine.LED_BLUE.Low()
 
-		led = machine.Pin(input[2])
+		led = machine.Pin(rx[2])
 
-		proto.NewFrame(rspSetLED, 2, tx)
-		proto.SetFrameData(tx, []byte{proto.StatusOK})
-		uart.Write(tx[:rspSetLED.CmdLen().Bytelen()+1])
+		response, err = proto.NewFrame(rspSetLED, 2, []byte{proto.StatusOK})
 
 	case cmdSetTiming.Code():
-		timing = int(binary.LittleEndian.Uint16(input[2:]))
+		timing = int(binary.LittleEndian.Uint16(rx[2:]))
 
-		proto.NewFrame(rspSetTiming, 2, tx)
-		proto.SetFrameData(tx, []byte{proto.StatusOK})
-		uart.Write(tx[:rspSetTiming.CmdLen().Bytelen()+1])
+		response, err = proto.NewFrame(rspSetTiming, 2, []byte{proto.StatusOK})
 
 	case cmdBlinking.Code():
-		blinking = input[2] == 1
+		blinking = rx[2] == 1
 
-		proto.NewFrame(rspBlinking, 2, tx)
-		proto.SetFrameData(tx, []byte{proto.StatusOK})
-		uart.Write(tx[:rspBlinking.CmdLen().Bytelen()+1])
+		response, err = proto.NewFrame(rspBlinking, 2, []byte{proto.StatusOK})
+
+	default:
+		response, err = proto.NewFrame(proto.NewAppCmd(0x00, "cmdUnknown", proto.CmdLen1), 2, []byte{proto.StatusBad})
+
 	}
 
+	if err != nil {
+		return err
+	}
+
+	// read response into tx buffer
+	response.Read(tx)
+
+	// write tx buffer with response
+	uart.Write(tx[:response.Len()+1])
+
+	return nil
 }
