@@ -6,3 +6,7 @@ app:
 .PHONY: cmd
 cmd:
 	go run ./cmd/tkeyled
+
+.PHONY: test
+test:
+	go test ./pkg/...
