@@ -17,7 +17,12 @@ const (
 	StatusBad
 )
 
-var errBufferTooSmall = errors.New("buffer too small for frame")
+var (
+	errBufferTooSmall   = errors.New("buffer too small for frame")
+	errInvalidFrameID   = errors.New("frame ID must be 0..3")
+	errInvalidEndpoint  = errors.New("endpoint must be 0..3")
+	errInvalidCmdLength = errors.New("cmdlen must be 0..3")
+)
 
 type FramingHdr struct {
 	ID            byte
@@ -62,13 +67,13 @@ type Frame struct {
 // NewFrame creates a new frame with the given command, ID and data.
 func NewFrame(cmd Cmd, id int, data []byte) (Frame, error) {
 	if id > 3 {
-		return Frame{}, errors.New("frame ID must be 0..3")
+		return Frame{}, errInvalidFrameID
 	}
 	if cmd.Endpoint() > 3 {
-		return Frame{}, errors.New("endpoint must be 0..3")
+		return Frame{}, errInvalidEndpoint
 	}
 	if cmd.CmdLen() > 3 {
-		return Frame{}, errors.New("cmdlen must be 0..3")
+		return Frame{}, errInvalidCmdLength
 	}
 
 	return Frame{cmd, id, data}, nil
@@ -81,6 +86,16 @@ func (f *Frame) Len() int {
 
 // Read populates a slice of bytes with the header/data for the frame.
 func (f *Frame) Read(s []byte) (int, error) {
+	if f.id > 3 {
+		return 0, errInvalidFrameID
+	}
+	if f.cmd.Endpoint() > 3 {
+		return 0, errInvalidEndpoint
+	}
+	if f.cmd.CmdLen() > 3 {
+		return 0, errInvalidCmdLength
+	}
+
 	if err := f.readFrameHdr(s); err != nil {
 		return 0, err
 	}
