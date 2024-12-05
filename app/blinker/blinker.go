@@ -2,17 +2,13 @@ package main
 
 import (
 	"encoding/binary"
-	"machine"
 	"time"
 
 	"github.com/hybridgroup/tkey-led/pkg/proto"
 )
 
 var (
-	uart = machine.Serial
-
 	blinking = true
-	led      = machine.LED_GREEN
 	timing   = 500
 
 	cmdSetLED    = proto.NewAppCmd(0x01, "cmdSetLED", proto.CmdLen32)
@@ -24,9 +20,6 @@ var (
 )
 
 func main() {
-	// use default settings for UART
-	uart.Configure(machine.UARTConfig{})
-
 	rx := make([]byte, 256)
 	tx := make([]byte, 256)
 	i := 0
@@ -59,7 +52,7 @@ func main() {
 		}
 
 		if blinking {
-			led.Set(on)
+			ledSet(on)
 			on = !on
 		}
 
@@ -72,11 +65,7 @@ func handleCommand(rx []byte, tx []byte) (err error) {
 
 	switch rx[1] {
 	case cmdSetLED.Code():
-		machine.LED_RED.Low()
-		machine.LED_GREEN.Low()
-		machine.LED_BLUE.Low()
-
-		led = machine.Pin(rx[2])
+		changeLED(rx[2])
 
 		response, err = proto.NewFrame(rspSetLED, 2, []byte{proto.StatusOK})
 
