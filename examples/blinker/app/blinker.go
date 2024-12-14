@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/hybridgroup/tkey-led/pkg/proto"
+	"github.com/hybridgroup/tinygo-tkey/pkg/proto"
 )
 
 var (

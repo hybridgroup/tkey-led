@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/hybridgroup/tkey-led/pkg/proto"
+	"github.com/hybridgroup/tinygo-tkey/pkg/proto"
 )
 
 func TestHandleCommand(t *testing.T) {
